@@ -1,0 +1,68 @@
+lifecycle:
+  - build
+  - deploy
+
+env:
+  NODE_ENV: development
+
+  database__client: mysql
+  database__connection__host: 127.0.0.1
+  database__connection__user: ghost
+  database__connection__password: ghost
+  database__connection__database: ghost_development
+
+setup:
+  - command: |
+      apt-get update -qq
+      apt-get install -y build-essential make g++ python3 python3-dev libsqlite3-dev curl git mysql-server
+
+      service mysql start
+      mysql -e "CREATE DATABASE IF NOT EXISTS ghost_development;"
+      mysql -e "CREATE USER IF NOT EXISTS 'ghost'@'localhost' IDENTIFIED BY 'ghost';"
+      mysql -e "GRANT ALL PRIVILEGES ON ghost_development.* TO 'ghost'@'localhost';"
+      mysql -e "FLUSH PRIVILEGES;"
+
+  - command: |
+      curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+      apt-get install -y nodejs
+      node -v        
+
+  - command: |
+      corepack enable
+      corepack prepare yarn@1.22.22 --activate
+      yarn --version    
+
+  - git: https://github.com/TryGhost/Ghost.git
+
+  - command: |
+      cd /Ghost
+      yarn setup
+
+jobs:
+  build:
+    # - name: Run core (server) tests
+    #   command: |
+    #     cd /Ghost/ghost/core
+    #     test:all
+
+    # - name: Client Test
+    #   command: |
+    #     cd Ghost/ghost/admin
+    #     NODE_ENV=testing-mysql yarn test:unit
+    #     ember test 
+    
+    - name: Run unit tests
+      command: |
+        cd /Ghost/ghost/admin
+        yarn test:unit
+
+  deploy:
+    - blue-green:
+        runs:
+          - docker compose -f ghost-blue.yml up -d
+          - docker compose -f ghost-green.yml up -d
+        ports:
+          - 5001
+          - 5002
+        healthcheck: /
+        listen: 2368   

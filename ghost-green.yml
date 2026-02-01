@@ -1,0 +1,38 @@
+services:
+  db-green:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: ghost_prod
+      MYSQL_USER: ghost
+      MYSQL_PASSWORD: ghostpass
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - db-green:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpass"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ghost-green:
+    image: ghost:5
+    restart: unless-stopped
+    depends_on:
+      db-green:
+        condition: service_healthy
+    ports:
+      - "5002:2368"
+    environment:
+      url: http://localhost:2368
+      database__client: mysql
+      database__connection__host: db-green
+      database__connection__user: ghost
+      database__connection__password: ghostpass
+      database__connection__database: ghost_prod
+    volumes:
+      - ./content-green:/var/lib/ghost/content
+
+volumes:
+  db-green:
